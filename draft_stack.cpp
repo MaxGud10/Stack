@@ -8,7 +8,12 @@
 #include <assert.h> // TODO скачать TXLIbe
 #include <stdint.h>
 
+#pragma GCC diagnostic ignored "-Wredundant-tags"
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+
+
 #include "stack.h"
+
 
 //TODO: files dividing
 //main.cpp main.h
@@ -35,7 +40,7 @@ typedef unsigned long long Stack_Elem_t;
 
 // typedef unsigned long long canary_t;
 // typedef unsigned long long canary_buffer;
-// typedef unsigned long long canary_t; // uint64_t
+// typedef unsigned long long canary_t; // int
 // typedef unsigned long long canary_buffer;
 
 // canary_buffer giga_chicken_left  = 0xDEADC0DEDEADC0BA;
@@ -64,7 +69,6 @@ struct Stack_Information
     DBG (int line;)
 };
 
-//TODO: typedef struct
 struct Stack
 {
     #ifdef CANARY_PROTECT
@@ -81,19 +85,19 @@ struct Stack
     #endif
 };
 
-enum Stack_Error stack_ctor (struct Stack* stack, int capacity DBG (, struct Stack_Information info));
+Stack_Error stack_ctor (struct Stack* stack, int capacity DBG (, struct Stack_Information info));
 
-void stack_dump (struct Stack* stack DBG (, struct Stack_Information info));
+void       stack_dump (struct Stack* stack DBG (, struct Stack_Information info));
 
-int  stack_push (struct Stack* stack, Stack_Elem_t  elem DBG(, struct Stack_Information info));
-int  stack_pop  (struct Stack* stack, Stack_Elem_t* elem DBG(, struct Stack_Information info));
+int        stack_push (struct Stack* stack, Stack_Elem_t  elem DBG(, struct Stack_Information info));
+int        stack_pop  (struct Stack* stack, Stack_Elem_t* elem DBG(, struct Stack_Information info));
 
-int  stack_error      (struct Stack* stack); // верификатор 
-int  stack_assertFunc (struct Stack* stack);
+int        stack_error      (struct Stack* stack); // верификатор 
+int        stack_assertFunc (struct Stack* stack);
 
-int  stack_destroy (struct Stack* stack);
+int        stack_destroy (struct Stack* stack);
 
-void print_error_message (enum Stack_Error error);
+void       print_error_message (enum Stack_Error error);
 
 
 #define STACK_CTOR(stack, capacity) stack_ctor (stack, capacity DBG (, (struct Stack_Information) {#stack, __FILE__, __func__, __LINE__}))
@@ -107,21 +111,21 @@ int main (void)
 
     struct Stack stack = {};
 
-    enum Stack_Error ded_loh = STACK_CTOR (&stack, 4);
+    Stack_Error ded_loh = STACK_CTOR (&stack, 4);
     if (ded_loh != STACK_CTOR_NULL) // STACK_CTOR (&stack, 4) != 0
     {
         print_error_message (ded_loh);
         return ded_loh;
     }
 
-    printf("\nsizeof(STACK) = %lld\n", sizeof(struct Stack));
+    printf("\nsizeof(STACK) = %zu\n", sizeof(struct Stack));
 
     dbg printf("DED_LOH_0");
     STACK_PUSH (&stack, 1);
     dbg printf("\nded kvadrakopter_1\n");
     STACK_PUSH (&stack, 2);
-    STACK_PUSH (&stack, 2.2);
-    STACK_PUSH (&stack, 4.5);
+    STACK_PUSH (&stack, 2);
+    STACK_PUSH (&stack, 4);
 
     STACK_DUMP (&stack);
     txDump(stack.data - 1);
@@ -129,12 +133,12 @@ int main (void)
 
     Stack_Elem_t x = 0;
     if (STACK_POP (&stack, &x) == 0)
-        printf("Popped element: %.2f\n", x);
+        printf("Popped element: %llu\n", x);
     else
         print_error_message(STACK_POP_EMPTY);
 
-    dbg printf("\nDED_LOH_2\n");
     STACK_DUMP (&stack);
+    txDump(stack.data - 1);
 
     dbg printf("\n------------------------------------------------------------------------------\n");
 
@@ -161,7 +165,22 @@ void print_error_message (enum Stack_Error error)
             printf("\nError: Failed to allocate memory\n");
             break;
         case STACK_INVALID_CANARY:
-            printf("\nError: stack canaries are corrupted\n");
+            printf("\nError: Stack canaries are corrupted\n");
+            break;
+        case STACK_INVALID_SIZE:
+            printf("\nERROR: Size less than 0\n");
+            break;
+        case STACK_INVALID_CAPACITY:
+            printf("\nERROR: Capacity less than 0\n");
+            break;
+        case STACK_CANARY_LEFT_INVALID:
+            printf("\nERROR: Left canary invalid\n");
+            break;
+        case STACK_CANARY_RIGHT_INVALID:
+            printf("\nERROR: Right canary invalid\n");
+            break;
+        case STACK_INVALID_NULL_POINTER:
+            printf("\nERROR: stack invalid. PIZDEC\n");
             break;
         default:
             printf("\nded broke stack\n");
@@ -178,23 +197,30 @@ enum Stack_Error stack_ctor (struct Stack* stack, int capacity DBG (, struct Sta
     stack->left_canary = CANARY_VALUE;
     #endif 
 // [x] можно ли засунуть в один ifdef канарейки в ctor из стека
-    DBG(stack -> info = info;)
-//TODO: " -> "  -> "->"
+    DBG(stack->info = info;)
+
+
     stack->data = 1 + (Stack_Elem_t*) calloc (capacity + 2, sizeof(Stack_Elem_t));
-    //TODO: Заливка POISON значениями 
     if (!stack -> data) 
         return STACK_REALLOC_FAIL; 
+    printf("\n--------------------stack->data = %p------------------\n", stack->data);
 
     //TODO: Fix warning memcpy int to double memory
     //memcpy 101001010010
     //1001010101001
     //(int) x -> 2.2 "101010" -> 2 "10001" 
-    (stack -> data[-1])       = giga_chicken_left;
-    (stack -> data[capacity]) = giga_chicken_right;
+    (stack->data[-1])       = giga_chicken_left;
+    (stack->data[capacity]) = giga_chicken_right;
     
     // ? Add независмые канарейки от размера элемента стека -> юзать арифметику укзателей на char* свою и делать memcpy 
 
-    dbg printf("sizeof(DATA) = %lld, sizeof(CAPACITY) = %lld\n", sizeof(stack->data), sizeof(capacity));
+    for (int i = 0; i < capacity; i++) 
+    {
+        stack->data[i] = 0xDEADBAAD; // Инициализируем "ядовитыми" значениями
+    }
+
+
+    dbg printf("sizeof(DATA) = %zu, sizeof(CAPACITY) = %zu\n", sizeof(stack->data), sizeof(capacity));
 
     stack -> capacity = capacity;
     stack -> size     = 0;
@@ -219,7 +245,7 @@ void stack_dump (struct Stack* stack DBG (, struct Stack_Information info))
     printf("\nLeft Canary: %llx\n", stack->data[-1]); // 0x07060504030201
     #endif
 
-    uint64_t err = stack_error(stack);
+    int err = stack_error(stack);
 
     if (err & STACK_INVALID_NULL_POINTER) printf("\nstack = NULL and I have to write ......\n");
 
@@ -233,11 +259,18 @@ void stack_dump (struct Stack* stack DBG (, struct Stack_Information info))
 
 
     DBG (printf("\nStack[0x%p] called from %s: %d (----%s----) name %s born at %s:%d\n",
-            stack, info.function, info.line, info.function, stack -> info.name, stack -> info.file, stack -> info.line));
+            stack, info.function, info.line, info.function, stack->info.name, stack->info.file, stack->info.line));
 
-    for (int i = 0; i <= (stack -> capacity); i++)
-        printf("%s data[%2d] = %.2f\n", (i < stack -> size ? " * " : "   "),i, stack->data[i]);
-        // TODO: Check for your poison value
+    for (int i = 0; i < (stack->capacity); i++) // <= 
+    {
+        printf("%s data[%2d] = ", (i < stack->size ? " * " : "   "), i);
+        
+        if (stack->data[i] == 0xDEADBAAD) 
+            printf("0xDEADBAAD\n"); 
+        else 
+            printf("%llu\n", stack->data[i]);
+    }
+
         // data[4] = 11033793 (POISON)
     #ifdef CANARY_PROTECT
     printf("\nRight Canary: %llx\n", stack->data[stack->capacity]);
@@ -257,24 +290,37 @@ int stack_push(struct Stack* stack, Stack_Elem_t elem DBG(, struct Stack_Informa
     assert(stack);
     stack_assertFunc(stack); //TODO: Add in assertFunc - info information! 
 
-    if ((stack -> size) >= (stack -> capacity)) 
+    DBG(stack->info = info;)
+
+    if ((stack->size) >= (stack->capacity)) 
     {
-        int new_capacity = stack -> capacity * 2;
+        int new_capacity = stack->capacity * 2;
 
         Stack_Elem_t* new_data = 1 + (Stack_Elem_t*) realloc (stack->data + 1, (new_capacity + 2) * sizeof(Stack_Elem_t));
         //TODO: capacity - size - заполнить Poison
-        if (!new_data) return STACK_REALLOC_FAIL;
+        if (!new_data)
+            return STACK_REALLOC_FAIL;
+        // if (!new_data) 
+        // {
+        //     info.error_code = STACK_REALLOC_FAIL;
+        //     return STACK_REALLOC_FAIL;
+        // }    
 
-        (stack -> data[new_capacity]) = giga_chicken_right;
+        (stack->data[new_capacity]) = giga_chicken_right;
 
-        stack -> data     = new_data;
-        stack -> capacity = new_capacity;
+        for (int i = stack->capacity; i < new_capacity; i++) 
+        {
+            new_data[i] = 0xDEADBAAD;
+        }
+
+        stack->data     = new_data;
+        stack->capacity = new_capacity;
     }
 
-    stack -> data[stack->size++] = elem;
+    stack->data[stack->size++] = elem;
 
     stack_assertFunc(stack);
-
+    // info.error_code = 0;
     return 0;
 }
 
@@ -284,46 +330,32 @@ int stack_pop(struct Stack* stack, Stack_Elem_t* elem DBG(, struct Stack_Informa
     assert(stack);
     stack_assertFunc(stack);
 
-    if ((stack -> size) == 0) return STACK_POP_EMPTY;
+    DBG(stack->info = info;)
+
+    // if ((stack -> size) == 0) return STACK_POP_EMPTY;
 
     *elem = stack -> data[--stack->size];
-    //TODO: REALLOC REVERT
-    stack -> data[stack -> size] = 13116274355181; // BED_DED_F_ABED//TODO: REMOVE MAGIC NUMBER 
+
+    if (stack->size > 0 && stack->size <= stack->capacity / 4) 
+    {
+        int new_capacity = stack->capacity / 2;
+
+        Stack_Elem_t* new_data = 1 + (Stack_Elem_t*) realloc (stack->data + 1, (new_capacity + 2) * sizeof(Stack_Elem_t));
+        if (!new_data) return STACK_REALLOC_FAIL;
+
+        (stack->data[new_capacity]) = giga_chicken_right;
+
+        stack->data     = new_data;
+        stack->capacity = new_capacity;
+    }
+
+    stack->data[stack->size] = 0xDEADBAAD; // BED_DED_F_ABED//TODO: REMOVE MAGIC NUMBER 
 
     stack_assertFunc(stack);
 
     return 0; 
 }
 
-// int stack_error(struct Stack* stack) // верификатор 
-// {
-//     int x = ...;
-//     if (!stack)               return STACK_INVALID_NULL_POINTER; 
-    
-//     if (stack->size < 0)      return STACK_INVALID_SIZE;
-
-//     if (stack->capacity <= 0) return STACK_INVALID_CAPACITY;
-
-//     #ifdef CANARY_PROTECT
-//     if (stack->left_canary  != CANARY_VALUE) return STACK_CANARY_LEFT_INVALID;
-//     if (stack->right_canary != CANARY_VALUE) return STACK_CANARY_RIGHT_INVALID;
-//     #endif
-
-
-
-
-
-
-    // if (!stack || 
-    //     stack -> size     <  0 || 
-    //     stack -> capacity <= 0)
-    //     return STACK_INVALID_SIZE;
-
-    // #ifdef CANARY_PROTECT
-    // if (stack -> left_canary  != CANARY_VALUE || 
-    //     stack -> right_canary != CANARY_VALUE)
-    //     return STACK_INVALID_CANARY;
-    // #endif
     //TODO: Add better collection of errors in one number побитовые ошибки
     // K&R - битовые операции, а именно & и наложение маски на число
 
@@ -338,19 +370,18 @@ int stack_pop(struct Stack* stack, Stack_Elem_t* elem DBG(, struct Stack_Informa
 
 int stack_error(struct Stack* stack)
 {
-    uint64_t err = 0;
+    int err = 0;
 
     if (!stack) return STACK_INVALID_NULL_POINTER;
 
-    if (stack->size < 0) err |= STACK_INVALID_SIZE;
+    if (stack->size < 0)      err |= STACK_INVALID_SIZE;
 
-    if (stack->capacity <=0) err |= STACK_INVALID_CAPACITY;
+    if (stack->capacity <= 0) err |= STACK_INVALID_CAPACITY;
 
     #ifdef CANARY_PROTECT
     if (stack->left_canary  != CANARY_VALUE) err |= STACK_CANARY_LEFT_INVALID;
     if (stack->right_canary != CANARY_VALUE) err |= STACK_CANARY_RIGHT_INVALID;
     #endif
-
 
     return err;
 }
@@ -366,26 +397,25 @@ int stack_assertFunc(struct Stack* stack) // верификационный па
         if (stack == NULL)
             printf("ERROR: stack = %p\n", stack);
 
-        if ((stack -> data) == NULL)
-            printf("ERROR: stack->data = %p\n", (stack -> data));
+        if ((stack->data) == NULL)
+            printf("ERROR: stack->data = %p\n", (stack->data));
 
-        if ((stack ->size) > (stack -> capacity))
-            printf("ERROR: stack->size = %d | stack->capacity = %d\n", (stack -> size), (stack -> capacity));
+        if ((stack->size) > (stack->capacity))
+            printf("ERROR: stack->size = %d | stack->capacity = %d\n", (stack->size), (stack->capacity));
 
         assert(0);
     } 
 
-    //return 0;
     return error_code;
 }
 
 int stack_destroy (struct Stack* stack)
 {
-    free (stack -> data);
-    stack -> data      = NULL;
-    stack -> size      = 0;    
-    stack -> capacity = 0; 
-    //TODO: canary destroy
+    free (stack->data - 1);
+    stack->data      = NULL;
+    stack->size      = 0;    
+    stack->capacity  = 0; 
+    //TODO: canary destroy ?? она же и так в массиве 
     return 0;
 }
 
