@@ -5,8 +5,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h> // TODO скачать TXLIbe
-#include <stdint.h> // TODO написать богданы 
+#include <assert.h> 
+#include <stdint.h> 
 
 #pragma GCC diagnostic ignored "-Wredundant-tags"
 #pragma GCC diagnostic ignored "-Wfree-nonheap-object"
@@ -47,20 +47,20 @@ typedef unsigned long long Stack_Elem_t;
 
 enum Stack_Error 
 {
-    STACK_CTOR_NULL                  = 1,    //0x0001
+    STACK_CTOR_NULL                  = 1,    //0x0001 
     STACK_POP_EMPTY                  = 2,    //0x0002
     STACK_PUSH_OVERFLOW              = 4,    //0x0004
     STACK_REALLOC_FAIL               = 8,    //0x0008
     STACK_INVALID_SIZE               = 16,   //0x0010
-    STACK_INVALID_CANARY             = 32,  //TODO; 
-    STACK_INVALID_CAPACITY           = 64,
-    STACK_CANARY_LEFT_INVALID        = 128,
-    STACK_CANARY_RIGHT_INVALID       = 256,
-    STACK_GIGA_CHICKEN_LEFT_INVALID  = 512,
-    STACK_GIGA_CHICKEN_RIGHT_INVALID = 1024,
-    STACK_INVALID_HASH               = 2048,
-    STACK_INVALID_HASH_BUFFER        = 4096,
-    STACK_INVALID_NULL_POINTER       = 8192
+    STACK_INVALID_CANARY             = 32,   //0x0020
+    STACK_INVALID_CAPACITY           = 64,   //0x0040
+    STACK_CANARY_LEFT_INVALID        = 128,  //0x0080
+    STACK_CANARY_RIGHT_INVALID       = 256,  //0x0100
+    STACK_GIGA_CHICKEN_LEFT_INVALID  = 512,  //0x0200
+    STACK_GIGA_CHICKEN_RIGHT_INVALID = 1024, //0x0400
+    STACK_INVALID_HASH               = 2048, //0x0800
+    STACK_INVALID_HASH_BUFFER        = 4096, //0x1000
+    STACK_INVALID_NULL_POINTER       = 8192  //0x2000
 };
 
 struct Stack_Information
@@ -81,11 +81,11 @@ struct Stack
     int size;      // количество элементов записывается в стек  
     int capacity; // емкость (максимальный размер буфера)
  
-    #ifdef HASH_PROTECT
+    //#ifdef HASH_PROTECT
     uint32_t hash; // TODO написать богдану
     uint32_t hash_buffer;
     Stack_Information info; 
-    #endif
+    //#endif
 
     #ifdef CANARY_PROTECT
     canary_t right_canary;
@@ -126,7 +126,7 @@ int main (void)
     struct Stack stack = {};
     $$;
     Stack_Error ded_loh = STACK_CTOR (&stack, 4);
-    if (ded_loh != STACK_CTOR_NULL) // STACK_CTOR (&stack, 4) != 0
+    if (ded_loh != STACK_CTOR_NULL)
     {
         print_error_message (ded_loh);
         return ded_loh;
@@ -217,7 +217,7 @@ enum Stack_Error stack_ctor (struct Stack* stack, int capacity DBG (, struct Sta
     DBG(stack->info = info;)
 
 
-    stack->data = 2 + (Stack_Elem_t*) calloc (capacity + 2, sizeof(Stack_Elem_t));
+    stack->data = 2 + (Stack_Elem_t*) calloc (capacity + 2, sizeof(Stack_Elem_t)); // [x] + 2
     if (!stack -> data) 
         return STACK_REALLOC_FAIL; 
     printf("\n--------------------stack->data = %p------------------\n", stack->data);
@@ -267,6 +267,8 @@ void stack_dump (struct Stack* stack DBG (, struct Stack_Information info))
     #ifdef CANARY_PROTECT
     printf("\nLeft Canary: %llx\n", stack->data[-1]); // 0x07060504030201
     #endif
+
+    printf("\n<< stack->data[0] = %p >>\n", stack->data );
 
     unsigned err = stack_error(stack);
     printf("err = %016X", err);
@@ -321,12 +323,9 @@ int stack_push(struct Stack* stack, Stack_Elem_t elem DBG(, struct Stack_Informa
 {
     assert(stack);
     $$;
-    // printf("\nRight Canary: %llx\n", stack->data[stack->capacity]);
-    // printf("right_canary = %p", stack->data[stack->capacity]);
-    // printf("left_canary = %p" ,  stack->data[-1]);
-    //txDump(stack->data - 1);
+
     stack_assertFunc(stack); 
-    $$; // не доходит 
+
 
     DBG(stack->info = info;)
 
@@ -334,7 +333,7 @@ int stack_push(struct Stack* stack, Stack_Elem_t elem DBG(, struct Stack_Informa
     {
         int new_capacity = stack->capacity * 2;
 
-        Stack_Elem_t* new_data = 1 + (Stack_Elem_t*) realloc (stack->data + 1, (new_capacity + 2) * sizeof(Stack_Elem_t));
+        Stack_Elem_t* new_data = 1 + (Stack_Elem_t*) realloc (stack->data - 1, (new_capacity + 2) * sizeof(Stack_Elem_t));
         //TODO: capacity - size - заполнить Poison
         if (!new_data)
             return STACK_REALLOC_FAIL;
@@ -381,7 +380,7 @@ int stack_pop(struct Stack* stack, Stack_Elem_t* elem DBG(, struct Stack_Informa
     {
         int new_capacity = stack->capacity / 2;
 
-        Stack_Elem_t* new_data = 1 + (Stack_Elem_t*) realloc (stack->data + 1, (new_capacity + 2) * sizeof(Stack_Elem_t));
+        Stack_Elem_t* new_data = 1 + (Stack_Elem_t*) realloc (stack->data - 1, (new_capacity + 2) * sizeof(Stack_Elem_t));
         if (!new_data) return STACK_REALLOC_FAIL;
 
         (stack->data[new_capacity]) = giga_chicken_right;
